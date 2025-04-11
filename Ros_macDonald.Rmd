@@ -1,0 +1,231 @@
+---
+title: "Ross_MacDonald Model in R"
+author: "Moreen Mbuki"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(deSolve)
+library(ggplot2)
+```
+
+
+```{r}
+m=10 # relative density mosquito/human
+a=0.9 # biting rate
+b=0.09 # probability that a bite successfully infects the human
+c=0.5 # probability that a bite successfully infects the mosquito
+p =0.95 # mosquito survival ( exp(-g) where g is the mortality rate for the mosquito)
+v=12 # extrinsic incubation period
+r=40/80 # recovery rate in human
+
+```
+
+
+
+```{r}
+theta_init =c("m"=m,"a"=a,"b"=b, "c"=c,"p"=p,"v"=v, "r"=r)
+theta_init =c("m"=10,"a"=0.25,"b"=0.09, "c"=1,"p"=0.95,"v"=12, "r"=1/80)
+theta_init =c("m"=100,"a"=0.5,"b"=0.09, "c"=1,"p"=0.9,"v"=12, "r"=1/80)
+theta_init =c("m"=2000,"a"=0.1*(1/3),"b"=0.09, "c"=1,"p"=0.75,"v"=12, "r"=1/80)
+
+theta_init =c("m"=2000,"a"=(1/40)*(1/2),"b"=0.09, "c"=1,"p"=0.8,"v"=9, "r"=1/80)
+
+```
+
+
+```{r}
+##SIR model
+RossMacDonald<-function(t,x,parms){
+  # version from Smith and McKenzie, 2004
+  
+  ## state variables
+  Hi = x[1]
+  Vi = x[2]
+  
+  ## parameter values
+  m = parms["m"]
+  a = parms["a"]
+  b = parms["b"]
+  c = parms["c"]
+  p = parms["p"]
+  v = parms["v"]
+  r = parms["r"]
+  g= -log(p)
+  
+  ##variations
+  dHi=m*a*b*(1-Hi)*Vi - r*Hi
+  dVi= a*c*Hi*(exp(-g*v)-Vi) - g*Vi
+  res  = c(dHi, dVi)
+  list(res)
+}
+
+simulate_RM=function(parameters){
+  
+  #parameters
+  parms = c(parameters["m"],parameters["a"],
+            parameters["b"],parameters["c"],
+            parameters["p"],parameters["v"],
+            parameters["r"])
+  
+  #initial conditions
+  init <- c(0.05,0)  
+  
+  #simulation
+  temps <- seq(0,500) 
+  solveRM <- lsoda(y =init, times=temps, func = RossMacDonald, 
+                   parms = parms)
+  solutionRM=as.data.frame(solveRM)
+  names(solutionRM)=c("time","Hi","Vi")
+  
+  return(solutionRM)
+}
+
+calculate_R0=function(parameters){
+  return(c("R0"=as.numeric(parameters["m"]*(parameters["a"]^2)*parameters["b"]*parameters["c"]*(parameters["p"]^parameters["v"])/parameters["r"]/(-log(parameters["p"])))))
+}
+
+simul=simulate_RM(parameters = theta_init)
+
+ggplot(simul)+
+  geom_line(aes(x=time, y=Hi))+ ylim(0,1)+
+  labs(y="Proportion of\ninfected individuals", x="Time (days)")+
+  ggtitle(paste0("R0=",round(calculate_R0(theta_init),2)))
+
+
+```
+
+```{r}
+library(deSolve)
+library(tidyverse)
+
+# color palette
+ibara = c("lightblue", "#fec44f", "#d95f0e", "grey8", "lightgreen")
+# # Model parameters 
+r = 0.01 # Recovery rate
+b = 0.02 # Transmission rate
+I = 1000 # Proportion  of the Infected Population
+S = 1000 # Proportion  of the Susceptive Population
+N =  S + I  # Total Population
+
+# ODE equations 
+SIS_Model <- function(t , x , parms){
+  
+  # State variable 
+  S = x[1]
+  I = x[2]
+  R = x[3]
+  N = 20000
+  
+  # Model parameters 
+  b = parms["b"]
+  r = parms["r"]
+  c = parms["c"]
+  
+  # Model equations 
+  # dS <- -b*(1-S)*I + I*r 
+  # dI <-  b*(1-S)*I - I*r
+  # list(c(dS,dI))
+  
+  #Model assumption
+  dS <- -b*(S/N)*I + I*r + c*R
+  dI <-  b*(S/N)*I - I*r
+  dR <- I*r - c*R
+  list(c(dS,dI, dR))
+}
+
+
+# Simmulating ths model '
+
+simulate_SIS = function(parameters){
+  
+  # create the functions that would simulate the model
+  
+  
+  #parameters
+  parms =c(parameters["b"],
+           parameters["r"],
+           parameters["c"])
+  
+  #initial conditions
+  N=2000
+  #states <- c(S=0.7,I=0.3) 
+  states <- c(S=2000,I=10, R=2000)
+  
+  # simulation time 
+  times <- seq(0, 200, by = 1)
+  
+  times <- seq(0, 200, by = 1)
+  
+  # solver of the eq. of the model
+  output_sis <- ode(y = states, times = times, func = SIS_Model, parms = parameters) %>% 
+    as_tibble()
+  
+  names(output_sis) = c("time","S","I", "R")
+  
+  
+  return(output_sis)
+  
+}
+
+# Definition of parameters
+# start with these values
+parameters <- c(b=1.2, # transmission rate
+                r=0.01, #,# recovery rate 
+                c=0.2 # Rate of loss of immunity 
+)
+# simulate the model
+simul = simulate_SIS(parameters) 
+print(simul)
+#View(simul)
+
+# Plotting 
+library(ggplot2)
+
+ggplot(simul)+
+  geom_line(aes(time, S), col= "lightblue") +
+  geom_line(aes(time, I), col= "tomato") +
+  geom_line(aes(time, R), col= "lightgreen") +
+  scale_x_continuous("time") +
+  scale_y_continuous("number of individuals ", limits = c(0,2000)
+  )
+
+
+# Parameter 
+
+parameters <- c(b=0.5, # transmission rate
+                r=1.1 ,# recovery rate 
+                c=3.5 # Rate of loss of immunity 
+)
+
+
+library(ggplot2)
+library(zoo)
+
+# Check and clean data
+  # Check for missing values
+simul <- na.omit(simul)  # Remove NAs
+simul$S <- na.approx(simul$S)  # Interpolate missing values
+simul$I <- na.approx(simul$I)
+simul$R <- na.approx(simul$R)
+#summary(simul)
+#View(simul)
+# Check data range to avoid removed rows in plot
+y_max <- max(simul$S, simul$I, simul$R, na.rm = TRUE)
+
+# Plot
+ggplot(simul) +
+  geom_line(aes(time, S), col = "lightblue") +
+  geom_line(aes(time, I), col = "tomato") +
+  geom_line(aes(time, R), col = "lightgreen") +
+  scale_x_continuous("time") +
+  scale_y_continuous("number of individuals", limits = c(0, y_max))
+
+
+```
+
