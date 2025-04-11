@@ -1,0 +1,732 @@
+---
+title: "Malaria Modelling"
+subtitle: "Assigment - Week 2"
+author: "Moreen Mbuki Nderitu"
+date: "`r format(Sys.time(), '%d %B, %Y')`" 
+header-includes:
+  - \usepackage{xcolor} 
+  - \usepackage{fancyhdr} 
+  - \pagestyle{fancy}
+  - \fancyhf{}
+  - \fancyhead[L]{Assignment 2}
+  - \fancyfoot[R]{Moreen Mbuki Nderitu} 
+  - \fancyfoot[C]{\thepage}
+  - \fancyfoot[L]{\includegraphics[width =.2\textwidth]{LOGO.png}} 
+  - \usepackage[T1]{fontenc}
+  - \usepackage{titling} 
+  - \pretitle{\begin{center}
+    \LARGE\includegraphics[width=5cm]{LOGO.PNG}\\[\bigskipamount]}
+  - \posttitle{\end{center}}
+  - \usepackage{float} 
+  - \floatplacement{figure}{H}
+  - \setcounter{secnumdepth}{3}  
+geometry: margin=1in
+mainfont: libertine
+urlcolor: blue
+output:
+  pdf_document:
+    latex_engine: pdflatex
+    number_sections: false
+    extra_dependencies: ["calrsfs", "hyperref", "xcolor"]
+toc: no
+toc_depth: 3
+toc-title: Table of Contents
+lot: false 
+---
+
+\newpage
+
+\tableofcontents  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align = 'center', fig.width=7, fig.height=5, 
+                      message = FALSE, warning = FALSE, comment = FALSE)
+
+```
+
+\newpage
+
+# Instructions 
+
+Solve the exercises below by providing R code inside code chunks, and the rest outside the code chunks. Submit both the RMarkdown (.Rmd) file and the resulting pdf file.
+
+\textbf{This coding assignment} is your chance to showcase your critical thinking and programming skills \textbf{without the aid of AI tools}. \textit{\textbf{Any suspicion of AI usage will lead to a failing grade}}. \textbf{Your success as a} disease \textbf{modeler} relies on \textbf{your ability to think critically and solve problems independently}. Embrace this genuine learning and growth opportunity, and enthusiastically tackle the challenge!
+
+# Packages
+
+Load all the packages and libraries that will be used for all the tasks in the assignment.
+
+```{r, echo=TRUE}
+setwd("~/Desktop/AIMS/AIMS Review Phase/Malaria Modelling")
+
+```
+
+
+```{r, echo=TRUE}
+library(deSolve)
+library(tidyverse)
+
+```
+
+
+# Task Description
+
+Politicians are starting to worry about this emerging disease (rightly so, as it is believed that the fall of Atlantis is due to their attempt to stop the spread of this disease). Therefore, you have to act quickly! They ask you to help them develop a model that will help them understand the dynamic of the ZYMB virus before it expands throughout the country. To do this, you have to simulate the dynamic of transmission.
+
+
+This disease seems to transform his victims into zombies. They noticed that the susceptible individuals could be infected by a zombie either by being defeated by a zombie during an attack (rate of $\beta = \frac{1}{5}$) or by being bitten by an infected tick (rate = m = 0.005). Once exposed to the virus, individuals do not transform immediately. They are asymptomatic (compartment E) for 12 hours (rate = P = $\frac{1}{12}$), then switch to a zombie state (compartment z). The transformation is permanent. Compartment D includes individuals that didn’t survived a zombie attack. They stay there for about 10 hours and then resuscitate to become a zombie with a rate of R = $\frac{1}{20}$.
+
+
+A tick can be infected by feeding on a zombie (rate n = 0.004). It will be assumed that once a tick is infected, they do not survive very long with "U" as a parameter (20 hours, long enough to bite someone). Therefore, new zombies can only come from these three sources:
+
+(1) The rise of the deceased from compartment D (rate = b)
+(2) Susceptible who "lost" a fight with a zombie (rate = k)
+(3) Susceptible which have been bitten by an infected tick (rate = m)
+
+They also noticed that the zombies did not attack the other zombies. It seems an individual can avoid zombification by an altercation at a particular level (K = $\frac{1}{15}$). This can be done by beheading the zombies or destroying their brains because a remedy has not yet been developed.
+
+Let us assume that the country has a population of N=800,000, and the tick population is Tq = 2 million. At the start of the simulation, we have these conditions, i.e., at a time equal to zero: 
+
+a.	500 humans are exposed
+b.	Zero zombies are detected
+c.	All the ticks are susceptible
+
+
+# Questions
+
+1.	Using a flow diagram, schematically represent the ZYMB transmission system in the populations. You will consider that an infected individual does not become infectious immediately.
+
+
+```{r echo=FALSE, out.width="50%", fig.align="center"}
+setwd("/home/moreen/Desktop/AIMS/AIMS Review Phase/Malaria Modelling")
+knitr::include_graphics("/home/moreen/Desktop/AIMS/AIMS Review Phase/Malaria Modelling/Model1.png")
+```
+
+
+
+#### Model Parameters and Variables 
+
+```{r}
+# Load necessary library
+library(knitr)
+library(kableExtra)
+
+# Define parameters in a data frame
+parameters_table <- data.frame(
+  Parameter = c("beta", "m", "P", "R", "K", "n", "U", "k"),
+  Value = c("1/5", "0.005", "1/12", "1/20", "1/15", "0.004", "1/20", "0.3"),
+  Description = c(
+    "Zombie attack rate",
+    "Tick bite rate",
+    "Transformation rate (Exposed → Zombie)",
+    "Resurrection rate (Dead → Zombie)",
+    "Zombie elimination rate",
+    "Tick infection rate",
+    "Tick death rate",
+    "Fraction of humans who loss in a zombie attack"
+  ),
+  Units = c(
+    "Infections per day",
+    "Bites per day",
+    "Per day",
+    "Per day",
+    "Per day",
+    "Infections per day",
+    "Per day",
+    "Dimensionless"
+  )
+)
+
+# Display table in R Markdown
+kable(parameters_table, caption = "Parameter Definitions for the Zombie Model")
+
+```
+
+
+#### Model Assumptions
+
+  1. We assume that the population is constant that is $N_h = S_h + E_h + D_h + Z$ and for the tick population $N_t = S_t + N_t$. 
+  2. The zombies do not attack other zombies.
+  3. We assume once an individual transform into a zombies it permanent.
+  4. We assume there are no natural birth and death in the human population.
+  5. We assume once an individual is defeated by a zombie and they die they can resuscitate to a new zombie.
+  6. We assume the once a susceptible individual is attacked by a zombie the can either defeat the zombie or loss the fight and die.
+  7. We assume that once the susceptible individual win the fight with the zombie they do not get exposed to the ZYMB virus and thus they remain in the susceptible compartment.
+  8. We assume the susceptible individuals can only get exposed if they a bitten by an infected tick.
+
+
+2.	Explain the differential equations system defining the model.
+
+#### System of Equations
+
+These equations describe the rates of change for each population group:
+
+- Susceptible (S_h): These are individual that are susceptible to ZYMB virus. They can get infected through zombie attacks at rate $\beta$ or tick bites with $m$ as the tick bite rate. 
+
+$$
+\frac{dS_h}{dt} = -k\beta S_h Z - m S_h I_t + K Z S_h
+$$
+
+
+- Exposed (E_h): These are the susceptible individual who are exposed to ZYMB virus either through a tick bite.Increases when susceptible individuals are infected by a tick, decreases as they turn into zombies.
+
+$$
+\frac{dE_h}{dt} =   m S_h I_t - P E_h
+$$
+
+
+- Zombies (Z): One can become a zombie when they are exposed from the ZYMB virus and after being bitten by an infected tick and after some time they transform to zombies at the rate $p$. Similarly, once a susceptible individual is defeated during the zombie attack they dead and after some hour rise to become new zombies. The number of the zombies decrease when the susceptible individual win the attacked and manage to eliminate the zombie by beheading or destroying their brains.
+
+$$
+\frac{dZ}{dt} = P E_h + R D_h - K Z S_h
+$$
+
+
+- Dead (D_h): When the susceptible individual is attacked and they defeat the zombie they dies but after sometime rise as new zombies.
+$$
+\frac{dD_h}{dt} = k\beta S_h Z - R D_h
+$$
+
+
+- Susceptible Ticks (S_t) : Total population of the ticks that are susceptible to ZYMB  virus from the zombies.
+$$
+\frac{dS_t}{dt} = -n Z S_t 
+$$
+
+
+- Infected Ticks :Ticks that infect human through a bite and die after some time.
+$$
+\frac{dI_t}{dt} = n Z S_t - U I_t
+$$
+
+
+
+
+
+
+
+3. Use a deterministic approach to simulate the epidemic that would follow the introduction of 10 zombies.
+
+```{r, echo=FALSE}
+library(deSolve)
+library(tidyverse)
+
+zombie_model <- function(time, state, parameters) {
+  
+  # Defining the Populations
+  N = 8000000  # Total population 
+  N_t = 2000000 #Total population for the ticks 
+  
+  
+  # States 
+  S = state["S"]   # Susceptible Compartment Individuals  Human
+  E = state["E"]   # Exposed Compartment Individuals 
+  Z = state["Z"]   # Zombies Compartment 
+  D = state["D"]   # Dead Compartment 
+  T = state["T"]   # Susceptible Ticks Compartment
+  I = state["I"]   # Infected Ticks Compartments
+  
+  N  = S + E +Z + D  # Total Human Population 
+  N_t = T + I        # Total Ticks Population
+  
+  
+  # Defining the ordinary differential equations for the compartments 
+  with(as.list(c(state, parameters)), {
+    dS = -(k*beta * S * Z/N ) - m * S * I + K * Z/N * S
+    dE =  m * S * I - P * E 
+    dZ = P * E + R * D - K * Z/N * S
+    dD = k * beta * S * Z/N - R * D
+    dT = -(n * Z *T/N_t ) - U * T
+    dI =  (n * Z *T/N_t ) - U * I  
+    
+
+    list(c(dS, dE, dZ, dD, dT, dI))
+  })
+}
+
+
+# Function to Simulate the Zombie Model
+simulate_zombie_model <- function(parameters) {
+  
+  # Initial Conditions
+  N = 8000000     # Total population 
+  N_t = 2000000   # Total population for the ticks 
+  
+  
+  state <- c(S = 799500,  # Susceptible Humans 
+             E = 490,     # Exposed Humans 
+             Z = 10,      # Zombies
+             D = 0,       # Dead Humans
+             T = 2000000, # Susceptible Ticks 
+             I = 0)       # Infected Ticks
+  
+  # Time Points
+  times <- seq(0, 100, by = 1)
+
+  # Solve ODE
+  output_zombie <- ode(y = state, times = times, func = zombie_model,
+                       parms = parameters) %>% 
+    as_tibble()
+
+  # Correct Column Naming
+  colnames(output_zombie) <- c("time", "S", "E", "Z", "D", "T","I")
+
+  return(output_zombie)
+}
+
+```
+
+
+
+4. Graphically, represent the infectious dynamics (the curves of the epidemic).
+
+
+```{r, echo=FALSE}
+# Define Parameters
+parameters <- c(
+  beta = 1/5,  # Zombie attack rate
+  m = 0.005,   # Tick bite rate
+  P = 1/12,    # Transformation rate (Exposed → Zombie)
+  R = 1/10,    # Resurrection rate (Dead → Zombie)
+  K = 1/15,    # Zombie elimination rate
+  n = 0.004,   # Tick infection rate
+  U = 1/20,    # Tick death rate
+  k = 0.3,     # Rate of losing a fight with a zombie
+  q = 0.04     # Fraction of quarantining the exposed individuals 
+)
+
+# Run Simulation
+simul_zombie_model <- simulate_zombie_model(parameters)
+
+# Plot the Results
+ggplot(simul_zombie_model) + 
+  geom_line(aes(time, S, colour = "Susceptible (S)")) + 
+  geom_line(aes(time, E, colour = "Exposed (E)")) + 
+  geom_line(aes(time, Z, colour = "Zombies (Z)")) +
+  geom_line(aes(time, D, colour = "Dead (D)")) +
+  geom_line(aes(time, T, colour = "Susceptibel Ticks (T)")) +
+  geom_line(aes(time, I, colour = "Infected Ticks (I)")) +
+  labs(
+    x = "Time (Hours)",
+    y = "Population",
+    color = "Compartments"
+  ) +
+  scale_x_continuous("Time (Hours)") +
+  ggtitle("Zombie Epidemic Simulation") +
+  scale_y_continuous("Number of Individuals and Ticks", limits = c(0, 2000000)) +
+  
+  theme_minimal()
+
+```
+
+#### Interpretation:
+
+
+From the above graph we can see the ZYMB virus dynamic in the population. The rate of transmission is very high in that the susceptible individual and susceptible ticks drops drastically dues to several transmission path for one to be a zombie. This resulting to increase in the number of the zombies in the population to a point is constant. This is because the number of zombies is being resulted to two cases exposes population and the dead human due to a zombie attack.
+
+The infected population of the ticks die off rapidly as we can from the graph this implies that despite ticks being the vector influencing the rate of ZYMB virus to the susceptible human it does not plays a major role compared to the case of the humans.
+
+
+
+
+
+```{r, echo=FALSE}
+
+# Plot the Results
+ggplot(simul_zombie_model) + 
+  geom_line(aes(time, T, colour = "Susceptibel Ticks (T)")) +
+  geom_line(aes(time, I, colour = "Infected Ticks (I)")) +
+  geom_line(aes(time, Z, colour = "Zombies (Z)")) +
+  labs(
+    x = "Time (Hours)",
+    y = "Population",
+    color = "Compartments"
+  ) +
+  scale_x_continuous("Time (Hours)") +
+  ggtitle("Zombie Epidemic Simulation") +
+  scale_y_continuous("Number of Ticks", limits = c(0, 2000000)) +
+  theme_minimal()
+
+```
+
+
+#### Intepretation:
+This graph show the interaction of the ticks with the zombies and it clear that ticks do not play a major role in the existence of zombies despite being a vector for transmission from zombies to human.
+
+
+5. After 24 hours: 
+  a.	How many individuals are exposed?
+    
+```{r,echo=FALSE ,cache.comments=FALSE}
+# Convert to dataframe for easier extraction
+simul_zombie_model_df <- as.data.frame(simul_zombie_model)
+
+exposed_24 <- round(simul_zombie_model_df$E[simul_zombie_model_df$time == 24],0)
+exposed_24 
+```
+    
+
+  b.	How many individuals are infected? 
+    
+```{r, echo=FALSE,cache.comments=FALSE}
+infected_24 <- round(simul_zombie_model_df$D[simul_zombie_model_df$time == 24])
+infected_24
+```
+   c.	How many zombies? 
+
+```{r, echo=FALSE,cache.comments=FALSE}
+zombies_24 <- round(simul_zombie_model_df$Z[simul_zombie_model_df$time == 24])
+zombies_24
+```
+
+
+
+#### Comment 
+
+We have a total of $597300$ zombies, $555$ decreased individuals and exposed individuals in $24$ hours. The number of zombies is high since there are varies path-way to become a zombie.
+
+
+
+6. What are the hypotheses of your model? 
+    a.	Are they reasonable? 
+    b.	What do you suggest to improve your model and free yourself from some of the hypotheses you deem unacceptable?  
+
+
+####  Hypotheses of the Model
+
+a. Are They Reasonable?
+
+The model hypothesis are based on the assumption made in the model development.The hypotheses of the model are mostly reasonable given the nature of a zombie epidemic scenario, but some aspects could be reconsidered:
+
+  - Constant Population Assumption – The assumption that no natural births or deaths occur in the human population is unrealistic for a long-term outbreak. Over time, new humans would be born, and natural deaths would occur, affecting the dynamics. However, for a short-term outbreak, this assumption is reasonable. Additionally, people move from one place to another it will be reasonable to include immigration of individuals. 
+
+  - Permanent Zombie Transformation – The assumption that once an individual transforms into a zombie, it is permanent might not align with some zombie lore where a cure exists. If a cure or rehabilitation were possible, it would change the model dynamics. Adding immunization and treatment will be help because it will consider the possibility some individuals recovering.
+
+  - Zombie Attacks and Outcomes – The assumption that a susceptible individual either defeats a zombie or dies but does not get exposed to the virus might be overly simplistic. In reality, a fight could result in injuries that later lead to infection.
+
+  - Vector-Borne Transmission – The model assumes that only infected ticks can expose susceptible individuals. This might not fully capture all possible transmission routes. For example, direct contact with an infected individual (like exposed humans) could also spread the ZYMB virus. There might be a possibility of the susceptible individual contacting some of the ZYMB virus during the fight.
+
+  - Zombies Do Not Attack Each Other – While this assumption simplifies interactions, some zombie lore includes cannibalistic zombies or infected zombies attacking weaker zombies. This could introduce intra-zombie competition, slightly modifying the dynamics.
+
+#### How to Improve the Model?
+
+To make the model more realistic and remove some of the restrictive assumptions, we could introduce the following modifications:
+
+  - Introduce Birth and Natural Death Rates – Adding natural births and deaths would make the model more applicable to long-term outbreaks. The total human population would then evolve over time rather than remain constant. Allow new susceptible to enter the population, preventing rapid depletion of S.  
+
+  - Allow for Possible Recovery or Immunity – Introducing a recovered compartment (R) where some exposed individuals develop immunity or get cured would make the model more biologically plausible. Consider the possibility of some exposed individuals recovering rather than turning into zombies this will reduce the population of the zombies.  
+
+  - Alternative Transmission Pathways – Instead of assuming only tick bites lead to exposure, the model could include direct human-to-human transmission (e.g., from exposed individuals or contaminated surfaces).
+
+  - Modify the Zombie-Human Fight Outcomes – Instead of assuming that susceptible individuals only die or win completely, introduce an injured compartment ($I_h$) for those who survive fights but later develop an infection.
+
+  - Zombie-Zombie Interactions – Introducing a term for zombie self-destruction, starvation, or cannibalism would create intra-zombie competition, making the model more complex but potentially more accurate.
+
+
+7.	To go further, consider a quarantine compartment. If individuals are detected on time, they can be sent to quarantine at a rate of $Q = 0.04$. Who will be impacted by this measure?
+
+
+```{r echo=FALSE, out.width="50%", fig.align="center"}
+setwd("/home/moreen/Desktop/AIMS/AIMS Review Phase/Malaria Modelling")
+knitr::include_graphics("/home/moreen/Desktop/AIMS/AIMS Review Phase/Malaria Modelling/Model2.png")
+```
+
+  
+
+##### Model Parameters and Variables 
+
+
+```{r}
+# Load necessary library
+library(knitr)
+library(kableExtra)
+
+# Define parameters in a data frame
+parameters_table <- data.frame(
+  Parameter = c("beta", "m", "P", "R", "K", "n", "U", "k", "q"),
+  Value = c("1/5", "0.005", "1/12", "1/20", "1/15", "0.004", "1/20", "0.3", "0.004"),
+  Description = c(
+    "Zombie attack rate",
+    "Tick bite rate",
+    "Transformation rate (Exposed → Zombie)",
+    "Resurrection rate (Dead → Zombie)",
+    "Zombie elimination rate",
+    "Tick infection rate",
+    "Tick death rate",
+    "Fraction of humans who survive a zombie attack",
+    "Quarantine rate "
+  ),
+  Units = c(
+    "Infections per day",
+    "Bites per day",
+    "Per day",
+    "Per day",
+    "Per day",
+    "Infections per day",
+    "Per day",
+    "Dimensionless", 
+    "Per day"
+  )
+)
+
+# Display table in R Markdown
+kable(parameters_table, caption = "Parameter Definitions for the Zombie Model")
+
+```
+
+
+
+#### Model Assumptions
+
+  1. We assume that the population is constant that is $N_h = S_h + E_h + D_h + Z + Q$ and for the tick population $N_t = S_t + N_t$. 
+  2. The zombies do not attack other zombies.
+  3. We assume once an individual transform into a zombies it permanent.
+  4. We assume there are no natural birth and death in the human population.
+  5. We assume once an individual is defeated by a zombie and they die they can resuscitate to a new zombie.
+  6. We assume the once a susceptible individual is attacked by a zombie the can either defeat the zombie or loss the fight and die.
+  7. We assume that once the susceptible individual win the fight with the zombie they do not get exposed to the ZYMB virus and thus they remain in the susceptible compartment.
+  8. We assume the susceptible individuals can only get exposed if they a bitten by an infected tick.
+  9. We assume that it only the exposed individual that are taken into quarantine compartment for the observation.
+  10. Once the exposed individuals in the quarantine are found to be having the infection they are killed before they fully transform to zombies.
+  
+  
+
+8.	Answer questions (1, 3, 4, 5, and 6) for the model with the quarantine compartment. Comment on your results.
+
+
+#### System of Equations with Quarantine 
+
+
+These equations describe the rates of change for each population group:
+
+- Susceptible (S_h)
+$$
+\frac{dS_h}{dt} = -k\beta S_h Z - m S_h I_t + K Z S_h
+$$
+
+- Exposed (E_h)
+$$
+\frac{dE_h}{dt} =  m S_h I_t - P E_h -q E_h 
+$$
+
+- Zombies (Z)
+$$
+\frac{dZ}{dt} = P E_h + R D_h - K Z S_h
+$$
+
+
+- Dead (D_h)
+$$
+\frac{dD_h}{dt} = k\beta S_h Z - R D_h
+$$
+
+
+- Susceptible Ticks (S_t)
+$$
+\frac{dS_t}{dt} = -n Z S_t 
+$$
+
+
+- Infected Ticks (S_t)
+$$
+\frac{dI_t}{dt} = n Z S_t - U I_t
+$$
+
+
+- Quarantine (Q) 
+$$
+\frac{dQ}{dt} = q E_h - KQ
+$$
+
+
+
+
+
+```{r, echo=FALSE}
+library(deSolve)
+library(tidyverse)
+
+# ODE Model Function for Zombie Spread
+zombie_model <- function(time, state, parameters) {
+  
+  # Defining the Populations
+  N = 8000000  # Total population 
+  N_t = 2000000 #Total population for the ticks 
+  
+  
+  # States 
+  S = state["S"]   # Susceptible Compartment Individuals  Human
+  E = state["E"]   # Exposed Compartment Individuals 
+  Z = state["Z"]   # Zombies Compartment 
+  D = state["D"]   # Dead Compartment 
+  T = state["T"]   # Susceptible Ticks Compartment
+  I = state["I"]   # Infected Ticks Compartments
+  
+  N  = S + E +Z + D  # Total Human Population 
+  N_t = T + I        # Total Ticks Population
+  
+  
+  # Defining the ordinary differential equations for the compartments 
+  # Susceptible 
+  
+  with(as.list(c(state, parameters)), {
+    dS = -(k*beta * S * Z/N ) - m * S * I + K * Z/N * S
+    dE =  m * S * I - P * E - q * E
+    dZ = P * E + R * D - K * Z/N * S
+    dD = k * beta * S * Z/N - R * D
+    dT = -(n * Z *T/N_t ) - U * T
+    dI =  (n * Z *T/N_t ) - U * I  
+    dQ = q * E -K*Q
+
+    list(c(dS, dE, dZ, dD, dT, dI, dQ))
+  })
+}
+
+# Function to Simulate the Zombie Model
+simulate_zombie_model <- function(parameters) {
+  # Initial Conditions
+  state <- c(S = 799500,  # Susceptible
+             E = 490,     # Exposed
+             Z = 10,      # Zombies
+             D = 0,       # Dead
+             T = 2000000,
+             I = 0,
+             Q = 0) # Ticks
+  
+  # Time Points
+  times <- seq(0, 100, by = 1)
+
+  # Solve ODE
+  output_zombie <- ode(y = state, times = times, func = zombie_model,
+                       parms = parameters) %>% 
+    as_tibble()
+
+  # Correct Column Naming
+  colnames(output_zombie) <- c("time", "S", "E", "Z", "D", "T","I", "Q")
+
+  return(output_zombie)
+}
+
+
+
+
+```
+
+
+4. Graphically, represent the infectious dynamics (the curves of the epidemic).
+
+
+```{r, echo=FALSE}
+# Define Parameters
+parameters <- c(
+  beta = 1/5,  # Zombie attack rate
+  m = 0.005,   # Tick bite rate
+  P = 1/12,    # Transformation rate (Exposed → Zombie)
+  R = 1/10,    # Resurrection rate (Dead → Zombie)
+  K = 1/15,    # Zombie elimination rate
+  n = 0.004,   # Tick infection rate
+  U = 1/20,    # Tick death rate
+  k = 0.25,
+  q = 0.04 # Fraction of humans who survive a zombie attack
+)
+
+# Run Simulation
+simul_zombie_Quarantine_model <- simulate_zombie_model(parameters)
+
+# Plot the Results
+ggplot(simul_zombie_Quarantine_model) + 
+  geom_line(aes(time, S, colour = "Susceptible (S)")) + 
+  geom_line(aes(time, E, colour = "Exposed (E)")) + 
+  geom_line(aes(time, Z, colour = "Zombies (Z)")) +
+  geom_line(aes(time, D, colour = "Dead (D)")) +
+   geom_line(aes(time, T, colour = "Susceptibel Ticks (T)")) +
+   geom_line(aes(time, I, colour = "Infected Ticks (I)")) +
+  geom_line(aes(time, Q, colour = "Qurantine (Q)")) +
+  labs(
+    x = "Time (Hours)",
+    y = "Population",
+    color = "Compartments"
+  ) +
+  scale_x_continuous("Time (Days)") +
+  ggtitle("Zombie Epidemic Simulation with Quarantine") +
+  scale_y_continuous("Number of Individuals", limits = c(0, 800000)) +
+  theme_minimal()
+```
+
+
+#### Intepretation 
+
+
+The introduction of quarantine significantly alters the epidemic trajectory by slowing zombie emergence, reducing the number zombies from approximately $800,000$ before the introduction of quarantine to $500000$ after the introduction of quarantine when the dynamic stabilizes, and extending the outbreak duration. While it helps contain the spread, it also decreases the number of zombies as some of the exposed individuals go to the quarantine compartment.
+
+
+```{r, echo=FALSE}
+# Plot the Results
+ggplot(simul_zombie_Quarantine_model) + 
+  geom_line(aes(time, T, colour = "Susceptibel Ticks (T)")) +
+  geom_line(aes(time, I, colour = "Infected Ticks (I)")) +
+  geom_line(aes(time, Z, colour = "Zombies (Z)")) +
+  geom_line(aes(time, Q, colour = "Qurantine (Q)")) +
+  labs(
+    x = "Time (Hours)",
+    y = "Population",
+    color = "Compartments"
+  ) +
+  scale_x_continuous("Time (Days)") +
+  ggtitle("Zombie Epidemic Simulation with Quarantine") +
+  scale_y_continuous("Number of Individuals", limits = c(0, 2000000)) +
+  theme_minimal()
+
+```
+
+
+
+5. After 24 hours: 
+  a.	How many individuals are exposed?
+  
+```{r,echo=FALSE, cache.comments=FALSE}
+# Convert to dataframe for easier extraction
+simul_zombie_Quarantine_model_df <- as.data.frame(simul_zombie_Quarantine_model)
+
+exposed_24 <- round(simul_zombie_Quarantine_model_df$E[simul_zombie_Quarantine_model_df$time == 24],0)
+exposed_24 
+```
+    
+
+  b.	How many individuals are infected? 
+    
+```{r, echo=FALSE,cache.comments=FALSE}
+infected_24 <- round(simul_zombie_Quarantine_model_df$D[simul_zombie_Quarantine_model_df$time == 24])
+infected_24
+```
+
+  c.	How many zombies? 
+
+```{r, echo=FALSE,cache.comments=FALSE}
+zombies_24 <- round(simul_zombie_Quarantine_model_df$Z[simul_zombie_Quarantine_model_df$time == 24])
+zombies_24
+```
+
+
+
+#### Comment :
+
+Comparing the number of individuals that are exposed, infected by this case we refer to the decreased individuals and zombies with and without quarantine. We can see that there is a significant difference this implying a positive impact of the quarantine in the model.
+
+
+6. What are the Hypotheses of Your Model?
+(a) Are They Reasonable?
+
+From to the above hypotheses from the two additional assumption the follow are the corresponding hypothesis.
+
+  - Only exposed individuals are quarantined. This assumes that susceptible individuals and zombies are not quarantined, which is realistic.This is because only individuals in the exposed compartment we are supposing the already have ZYMB virus and is just a matter of time for the them to transform to zombies. To control the rate at which they transform. 
+
+ - Infected individuals in quarantine are killed before full transformation. This assumption prevents zombies from escaping quarantine and spreading the infection further. It suggests that authorities immediately eliminate any detected infected individuals before they turn into zombies.
+
+
+(b) How Can We Improve the Model?
+
+ - Consider the quarantine of high-risk susceptible individuals:Instead of quarantining only exposed individuals, the model could allow some fraction of susceptible individuals who have been in close contact with zombies or infected ticks to be quarantined as well.
+
+ - Account for delayed detection and execution in quarantine: Instead of instant killing of infected individuals in quarantine, we could introduce a time delay before execution. Introduce interventions such as vaccination, medical treatments, or military interventions.
+        
